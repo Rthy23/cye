@@ -307,44 +307,49 @@ def record_order(order: dict, seen: set) -> bool:
 
 # --- 以下為 dashboard 統計專用函數，請加在 processor.py 的最後方 ---
 
+# processor.py — 核心處理層 (已移除所有對 pandas 的依賴)
+
+import json
+import logging
+import sqlite3
+from datetime import datetime
+import cloud_db
+from config import DB_PATH
+
+logger = logging.getLogger(__name__)
+
+# ... (保持原本的 JSON keys 和 _create_transactions 等函數不變) ...
+
+# --- 儀表板統計專用函數 (完全原生 SQLite 實作) ---
+
 def get_dashboard_summary():
-    """計算儀表板頂部所需的總覽數據"""
     conn = _connect()
-    df = pd.read_sql_query("SELECT * FROM transactions", conn)
+    c = conn.cursor()
+    c.execute("SELECT SUM(quantity) FROM transactions")
+    total_sold = c.fetchone()[0] or 0
+    c.execute("SELECT COUNT(DISTINCT user_id) FROM transactions")
+    user_count = c.fetchone()[0] or 0
+    c.execute("SELECT SUM(quantity) as total_q FROM transactions GROUP BY user_id ORDER BY total_q DESC LIMIT 10")
+    top10_vals = [row[0] for row in c.fetchall()]
+    top10_avg = sum(top10_vals) / len(top10_vals) if top10_vals else 0
     conn.close()
-    
-    if df.empty:
-        return {'total_sold': 0, 'user_count': 0, 'top10_avg': 0, 'hourly_increase': 0}
-    
-    total_sold = int(df['quantity'].sum())
-    user_count = int(df['user_id'].nunique())
-    
-    # 計算前 10 名平均
-    top10_sum = df.groupby('user_id')['quantity'].sum().nlargest(10)
-    top10_avg = float(top10_sum.mean()) if not top10_sum.empty else 0
-    
-    return {
-        'total_sold': total_sold,
-        'user_count': user_count,
-        'top10_avg': round(top10_avg, 2),
-        'hourly_increase': 0 # 若暫無時間戳記計算，可留 0
-    }
+    return {'total_sold': total_sold, 'user_count': user_count, 'top10_avg': round(top10_avg, 2)}
 
 def get_top_buyers(limit=10):
-    """取得購買量排行榜"""
+    """回傳 UserID 與 累計購買量 的列表"""
     conn = _connect()
-    df = pd.read_sql_query("SELECT user_id, quantity FROM transactions", conn)
+    c = conn.cursor()
+    c.execute("SELECT user_id, SUM(quantity) as total FROM transactions GROUP BY user_id ORDER BY total DESC LIMIT ?", (limit,))
+    results = c.fetchall()
     conn.close()
-    
-    if df.empty:
-        return pd.DataFrame(columns=['user_id', 'quantity'])
-        
-    return df.groupby('user_id')['quantity'].sum().nlargest(limit).reset_index()
+    return results  # 回傳格式: [('user_A', 50), ('user_B', 30)...]
 
 def get_country_distribution():
-    """取得國家/地區分佈"""
+    """回傳 國家 與 數量 的分佈"""
     conn = _connect()
-    df = pd.read_sql_query("SELECT country FROM transactions WHERE country IS NOT NULL", conn)
+    c = conn.cursor()
+    c.execute("SELECT country, COUNT(*) as count FROM transactions WHERE country IS NOT NULL GROUP BY country ORDER BY count DESC")
+    results = c.fetchall()
     conn.close()
-    return df['country'].value_counts()
+    return results  # 回傳格式: [('Taiwan', 100), ('Japan', 80)...]
   
