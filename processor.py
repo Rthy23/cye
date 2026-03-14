@@ -304,3 +304,47 @@ def record_order(order: dict, seen: set) -> bool:
         return False
     finally:
         conn.close()
+
+# --- 以下為 dashboard 統計專用函數，請加在 processor.py 的最後方 ---
+
+def get_dashboard_summary():
+    """計算儀表板頂部所需的總覽數據"""
+    conn = _connect()
+    df = pd.read_sql_query("SELECT * FROM transactions", conn)
+    conn.close()
+    
+    if df.empty:
+        return {'total_sold': 0, 'user_count': 0, 'top10_avg': 0, 'hourly_increase': 0}
+    
+    total_sold = int(df['quantity'].sum())
+    user_count = int(df['user_id'].nunique())
+    
+    # 計算前 10 名平均
+    top10_sum = df.groupby('user_id')['quantity'].sum().nlargest(10)
+    top10_avg = float(top10_sum.mean()) if not top10_sum.empty else 0
+    
+    return {
+        'total_sold': total_sold,
+        'user_count': user_count,
+        'top10_avg': round(top10_avg, 2),
+        'hourly_increase': 0 # 若暫無時間戳記計算，可留 0
+    }
+
+def get_top_buyers(limit=10):
+    """取得購買量排行榜"""
+    conn = _connect()
+    df = pd.read_sql_query("SELECT user_id, quantity FROM transactions", conn)
+    conn.close()
+    
+    if df.empty:
+        return pd.DataFrame(columns=['user_id', 'quantity'])
+        
+    return df.groupby('user_id')['quantity'].sum().nlargest(limit).reset_index()
+
+def get_country_distribution():
+    """取得國家/地區分佈"""
+    conn = _connect()
+    df = pd.read_sql_query("SELECT country FROM transactions WHERE country IS NOT NULL", conn)
+    conn.close()
+    return df['country'].value_counts()
+  
