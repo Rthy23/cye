@@ -13,6 +13,12 @@ except Exception as e:
     st.error(f"❌ 模組載入失敗: {e}")
     st.stop()
 
+# --- 在 main 函數之前執行初始化 ---
+try:
+    processor.init_db()
+except Exception as e:
+    st.error(f"資料庫初始化失敗: {e}")
+
 # --- 頁面配置 ---
 st.set_page_config(page_title="Yetimall 簽售監測與門檻分析", layout="wide")
 

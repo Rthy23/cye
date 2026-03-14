@@ -36,7 +36,7 @@ JITTER_LOW       = 1.0   # 隨機抖動下限（秒）
 JITTER_HIGH      = 3.0   # 隨機抖動上限（秒）
 
 # ── 資料庫路徑 ────────────────────────────────────────────────────────────────
-DB_PATH = os.path.join(os.path.dirname(__file__), "monitor.db")
+DB_PATH = "/tmp/yetimall_data.db"
 
 # ── Playwright keep-alive 週期（毫秒）────────────────────────────────────────
 KEEPALIVE_INTERVAL_MS = 15_000
